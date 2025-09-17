@@ -1,0 +1,2 @@
+// Card component placeholder
+export default function Card({children,className=''}){return <div className={`bg-white dark:bg-dark-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 ${className}`}>{children}</div>}
