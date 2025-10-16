@@ -1,9 +1,40 @@
-/* Minimal CSS so it builds without Tailwind configured */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Merriweather:wght@400;700;900&display=swap');
+/* Tailwind (assumes already configured in your project) */
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+/* Google Fonts for the newspaper vibe */
 
-html, body, #root { height: 100%; margin: 0; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: #f9fafb; color: #111827; }
-.dark body { background-color: #0f172a; color: #e5e7eb; }
-a { color: #2563eb; text-decoration: none; }
-a:hover { text-decoration: underline; }
-button { cursor: pointer; }
+
+@layer base {
+    html, body, #root { height: 100%; }
+    body {
+        @apply text-slate-900 dark:text-slate-100;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: transparent;
+    }
+    h1,h2,h3,h4,.serif { font-family: Merriweather, Georgia, 'Times New Roman', serif; }
+}
+
+/* Paper textures using pure CSS (no images) */
+@layer utilities {
+    .bg-paper-light {
+        /* subtle fiber + column pattern */
+        background:
+                radial-gradient(100% 100% at 50% 0%, rgba(255,255,255,0.9), rgba(248,250,252,0.95) 60%, rgba(241,245,249,0.98)),
+                repeating-linear-gradient(0deg, rgba(2,6,23,0.03), rgba(2,6,23,0.03) 1px, transparent 1px, transparent 28px),
+                repeating-linear-gradient(90deg, rgba(2,6,23,0.02), rgba(2,6,23,0.02) 1px, transparent 1px, transparent 24px);
+    }
+    .bg-paper-dark {
+        background:
+                radial-gradient(100% 140% at 50% -20%, rgba(120,53,15,0.35), rgba(15,23,42,0.9) 70%),
+                repeating-linear-gradient(0deg, rgba(249,115,22,0.05), rgba(249,115,22,0.05) 1px, transparent 1px, transparent 24px),
+                linear-gradient(180deg, #0b0f1a, #0b0f1a);
+    }
+    .masthead {
+        @apply font-serif font-black tracking-tight text-3xl sm:text-4xl; letter-spacing: 0.02em;
+    }
+    .kicker { @apply uppercase tracking-widest text-[11px] font-semibold text-slate-500 dark:text-amber-300/70; }
+    .headline { @apply font-serif text-xl font-bold leading-snug; }
+    .byline { @apply text-xs text-slate-500 dark:text-amber-200/60; }
+    .rule { @apply border-t border-slate-300/60 dark:border-amber-800/40; }
+}

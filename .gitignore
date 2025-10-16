@@ -17,7 +17,7 @@ src-tauri/target/
 Thumbs.db
 
 # --- Env/Secrets (never commit secrets)
-.env
+Backend/.env
 .env.*
 
 # Logs

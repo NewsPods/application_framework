@@ -1,5 +1,9 @@
 import { atom } from 'jotai';
 
-export const themeAtom = atom('light');
-export const mobileNavOpenAtom = atom(false);
-export const currentPageAtom = atom('dashboard');
+const initialTheme = (() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+})();
+
+export const themeAtom = atom(initialTheme);

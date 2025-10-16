@@ -1,59 +1,69 @@
-import { mockUsers } from '../utils/mockData';
+// src/services/authService.js
+const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 class AuthService {
     constructor() {
         this.currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+        this.token = localStorage.getItem('authToken') || null;
     }
 
-    async login(email, password) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const user = mockUsers.find(u => u.email === email && u.password === password);
-        if (user) {
-            const userData = { ...user, password: undefined };
-            this.currentUser = userData;
-            localStorage.setItem('currentUser', JSON.stringify(userData));
-            localStorage.setItem('authToken', 'mock-jwt-token-' + user.id);
-            return { success: true, user: userData };
-        }
-        return { success: false, error: 'Invalid credentials' };
-    }
-
-    async signup(email, password, name) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const newUser = {
-            id: mockUsers.length + 1,
-            email,
-            name,
-            subscription: 'free',
-            preferences: {
-                newspapers: [],
-                sections: [],
-                subtopics: []
-            }
+    _headers(json = true) {
+        return {
+            ...(json ? { 'Content-Type': 'application/json' } : {}),
+            ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
         };
+    }
 
-        mockUsers.push({ ...newUser, password });
-        this.currentUser = newUser;
-        localStorage.setItem('currentUser', JSON.stringify(newUser));
-        localStorage.setItem('authToken', 'mock-jwt-token-' + newUser.id);
-        return { success: true, user: newUser };
+    async login(identifier, password) {
+        const r = await fetch(`${API}/auth/login`, {
+            method: 'POST',
+            headers: this._headers(),
+            body: JSON.stringify({ identifier, password })
+        });
+        const data = await r.json();
+        if (r.ok && data.success) {
+            this.currentUser = data.user;
+            this.token = data.token;
+            localStorage.setItem('currentUser', JSON.stringify(data.user));
+            localStorage.setItem('authToken', data.token);
+            return { success: true, user: data.user };
+        }
+        return { success: false, error: data.error || 'Login failed' };
+    }
+
+    async signup({ first_name, last_name, email, username, password }) {
+        const r = await fetch(`${API}/auth/signup`, {
+            method: 'POST',
+            headers: this._headers(),
+            body: JSON.stringify({ first_name, last_name, email, username, password })
+        });
+        const data = await r.json();
+        if (r.ok && data.success) {
+            this.currentUser = data.user;
+            this.token = data.token;
+            localStorage.setItem('currentUser', JSON.stringify(data.user));
+            localStorage.setItem('authToken', data.token);
+            return { success: true, user: data.user };
+        }
+        return { success: false, error: data.error || 'Signup failed' };
+    }
+
+    async getCurrentUser() {
+        if (!this.token) return null;
+        const r = await fetch(`${API}/auth/me`, { headers: this._headers(false) });
+        const data = await r.json();
+        return data.user || null;
     }
 
     logout() {
         this.currentUser = null;
+        this.token = null;
         localStorage.removeItem('currentUser');
         localStorage.removeItem('authToken');
     }
 
-    getCurrentUser() {
-        return this.currentUser;
-    }
-
     isAuthenticated() {
-        return !!this.currentUser && !!localStorage.getItem('authToken');
+        return !!localStorage.getItem('authToken');
     }
 }
 
