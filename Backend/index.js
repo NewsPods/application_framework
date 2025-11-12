@@ -4,7 +4,8 @@ const cors = require('cors');
 const { query } = require('./db');
 const authRoutes = require('./authRoutes');
 const preferencesRoutes = require('./preferencesRoutes');
-
+const passwordResetRoutes = require('./passwordResetRoutes');
+const articlesRoutes = require('./articlesRoutes');
 
 const app = express();
 
@@ -29,9 +30,11 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', authRoutes);
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', passwordResetRoutes);
 
 app.use('/api/preferences', preferencesRoutes);
+
+app.use('/api/articles', articlesRoutes);
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`auth API on :${port}`));

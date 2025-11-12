@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    application_name: '$ newspods_auth', // shows up in Cockroach
+    application_name: '$ newspods_auth',
 });
 
 async function query(text, params) {

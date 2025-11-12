@@ -19,8 +19,10 @@ export default function Home(){
     const playEpisode = ()=>{ setTrack(episode); setIsPlaying(true); };
 
     return (
+
         <div className="space-y-6">
             {/* Daily episode banner */}
+            <div></div>
             <div className="rounded-2xl border rule bg-white/90 dark:bg-black/40 p-5">
                 <div className="kicker">Good day</div>
                 <h2 className="headline text-2xl">Your daily episode is ready</h2>

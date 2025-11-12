@@ -3,9 +3,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { topicSuggestions } from '../../utils/mockData';
 import PreferencesService from '../../services/preferencesService';
+import { useLoading } from '../../hooks/LoadingProvider.jsx'; // 👈 added
 
 export default function CustomizeTopics(){
     const nav = useNavigate();
+    const loading = useLoading(); // 👈 overlay controller
+
     const [topics, setTopics] = useState([]);
     const [input, setInput] = useState('');
 
@@ -26,16 +29,31 @@ export default function CustomizeTopics(){
             topics
         };
 
-        const result = await PreferencesService.updatePreferences(prefs);
-        if (result.success) {
-            console.log('✅ Preferences saved');
-        } else {
-            console.error('❌ Error saving preferences:', result.error);
+        loading.show('Saving your preferences…'); // 👈 show overlay
+        try {
+            const result = await PreferencesService.updatePreferences(prefs);
+            if (result?.success) {
+                // optional small delay for smoother UX
+                await new Promise(r => setTimeout(r, 600));
+                nav('/app');
+            } else {
+                console.error('❌ Error saving preferences:', result?.error);
+                // still navigate if that's your desired flow
+                nav('/app');
+            }
+        } finally {
+            loading.hide(); // 👈 hide overlay
         }
-
-        nav('/app');
     };
 
+    const skip = async () => {
+        loading.show('Taking you to your feed…');
+        try {
+            nav('/app');
+        } finally {
+            loading.hide();
+        }
+    };
 
     return (
         <div className="max-w-lg mx-auto px-4 pt-24 pb-24">
@@ -89,7 +107,7 @@ export default function CustomizeTopics(){
             {/* Actions */}
             <div className="mt-6 flex justify-between">
                 <button
-                    onClick={() => nav('/app')}
+                    onClick={skip}
                     className="px-4 py-3 rounded-lg border rule"
                 >
                     Skip
