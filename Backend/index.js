@@ -6,6 +6,7 @@ const authRoutes = require('./authRoutes');
 const preferencesRoutes = require('./preferencesRoutes');
 const passwordResetRoutes = require('./passwordResetRoutes');
 const articlesRoutes = require('./articlesRoutes');
+const hlsRoutes = require('./hlsRoutes');
 
 const app = express();
 
@@ -35,6 +36,8 @@ app.use('/api/auth', passwordResetRoutes);
 app.use('/api/preferences', preferencesRoutes);
 
 app.use('/api/articles', articlesRoutes);
+
+app.use('/api', hlsRoutes);
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`auth API on :${port}`));
