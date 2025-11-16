@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { query } = require('./db');
+const { authorizeB2 } = require('./b2-client');
 const authRoutes = require('./authRoutes');
 const preferencesRoutes = require('./preferencesRoutes');
 const passwordResetRoutes = require('./passwordResetRoutes');
@@ -40,4 +41,14 @@ app.use('/api/articles', articlesRoutes);
 app.use('/api', hlsRoutes);
 
 const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`auth API on :${port}`));
+async function startServer() {
+    try {
+        await authorizeB2(); // <-- Authorize with B2
+        app.listen(port, () => console.log(`auth API on :${port}`));
+    } catch (err) {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    }
+}
+
+startServer();
