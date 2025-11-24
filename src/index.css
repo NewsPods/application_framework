@@ -17,14 +17,17 @@
 
 /* Paper textures using pure CSS (no images) */
 @layer utilities {
-    .bg-paper-light {
-        /* subtle fiber + column pattern */
+    .bg-paper {
+        /* 1. Default (Light) Background */
         background:
                 radial-gradient(100% 100% at 50% 0%, rgba(255,255,255,0.9), rgba(248,250,252,0.95) 60%, rgba(241,245,249,0.98)),
                 repeating-linear-gradient(0deg, rgba(2,6,23,0.03), rgba(2,6,23,0.03) 1px, transparent 1px, transparent 28px),
                 repeating-linear-gradient(90deg, rgba(2,6,23,0.02), rgba(2,6,23,0.02) 1px, transparent 1px, transparent 24px);
     }
-    .bg-paper-dark {
+
+    /* 2. Dark Mode Override */
+    /* This selector says: "If .bg-paper is inside an element with .dark class" */
+    :is(.dark .bg-paper) {
         background:
                 radial-gradient(100% 140% at 50% -20%, rgba(120,53,15,0.35), rgba(15,23,42,0.9) 70%),
                 repeating-linear-gradient(0deg, rgba(249,115,22,0.05), rgba(249,115,22,0.05) 1px, transparent 1px, transparent 24px),

@@ -12,7 +12,8 @@ export default function NewsCard({ item, onPlay }){
                     <h4 className="headline text-lg">{item.title}</h4>
                     <div className="byline mt-1">{ago} • {mins}m brief</div>
                 </div>
-                <button onClick={onPlay} className="ml-3 px-3 py-1.5 text-sm rounded border rule bg-slate-900 text-white dark:bg-amber-500 dark:text-black">Play</button>
+                <button onClick={onPlay}
+                        className="ml-3 px-3 py-1.5 text-sm rounded border rule bg-slate-900 text-white dark:bg-amber-500 dark:text-black">Play</button>
             </div>
         </div>
     );

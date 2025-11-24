@@ -72,7 +72,7 @@ export default function App() {
     return (
         <JotaiProvider>
             <Router>
-                <div className="min-h-screen bg-paper-light dark:bg-paper-dark transition-colors">
+                <div className="min-h-screen bg-paper transition-colors">
                     <AppRoutes />
                     {/* No-op Toaster placeholder to keep structure similar */}
                     <Toaster />

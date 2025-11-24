@@ -101,6 +101,9 @@ export default function Home(){
 
     return (
         <div className="space-y-6">
+            <div>
+
+            </div>
             <div className="rounded-2xl border rule bg-white/90 dark:bg-black/40 p-5">
                 <div className="kicker">Good day</div>
                 <h2 className="headline text-2xl">Your daily episode is ready</h2>
@@ -122,7 +125,7 @@ export default function Home(){
                 <div className="rule mb-3" />
                 <div className="space-y-3">
                     {MY_MOCK_ARTICLES.map(a => (
-                        <NewsCard key={a.id} item={a} onPlay={() => { /* TODO: play single article */ }} />
+                        <NewsCard key={a.id} item={a} onPlay={() => {playEpisode}} />
                     ))}
                 </div>
             </section>

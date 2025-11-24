@@ -9,7 +9,7 @@ import { currentTrackAtom } from '../../store/atoms/audioAtoms';
 export default function Layout(){
     const [currentTrack] = useAtom(currentTrackAtom);
     return (
-        <div className="min-h-screen bg-paper-light dark:bg-paper-dark">
+        <div className="min-h-screen bg-paper">
             <Header />
             <main className="pt-20 pb-24 px-4 max-w-lg mx-auto">
                 <Outlet />
