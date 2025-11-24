@@ -22,6 +22,16 @@ const corsOptions = {
 app.use(cors(corsOptions));      // <-- handles preflight automatically in Express 5
 // app.options('*', cors(corsOptions)); // ❌ remove this
 
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        const color = duration > 500 ? '\x1b[31m' : '\x1b[32m'; // Red if > 500ms, Green otherwise
+        console.log(`${color}[${req.method}] ${req.originalUrl} - ${duration}ms\x1b[0m`);
+    });
+    next();
+});
+
 app.use(express.json());
 
 // attach db
@@ -44,7 +54,7 @@ const port = process.env.PORT || 4000;
 async function startServer() {
     try {
         await authorizeB2(); // <-- Authorize with B2
-        app.listen(port, () => console.log(`auth API on :${port}`));
+        app.listen(port, '0.0.0.0', () => console.log(`auth API on :${port}`));
     } catch (err) {
         console.error('Failed to start server:', err);
         process.exit(1);

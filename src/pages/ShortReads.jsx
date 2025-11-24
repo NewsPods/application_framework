@@ -1,11 +1,13 @@
-// src/pages/ShortReads.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import preferencesService from '../services/preferencesService';
+import { useLoading } from '../hooks/LoadingProvider';
 
-/** Local helper: safe JSON fetch that always sends the token (no global overlap) */
+// Helper: Secure fetch wrapper
 async function fetchJSON(path, opts = {}) {
     const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
     const url = path.startsWith('http') ? path : `${base}${path}`;
     const token = localStorage.getItem('authToken');
+
     const res = await fetch(url, {
         ...opts,
         headers: {
@@ -14,181 +16,258 @@ async function fetchJSON(path, opts = {}) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
     });
-    const ctype = res.headers.get('content-type') || '';
-    const body = ctype.includes('application/json') ? await res.json() : await res.text();
-    if (!res.ok) {
-        const msg = typeof body === 'string' ? body : body?.error || `HTTP ${res.status}`;
-        throw new Error(msg);
-    }
-    return body;
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
 }
 
-/** Compute IST day bounds from a UTC ISO timestamp, returning UTC ISO bounds */
-function istDayBoundsFromIso(iso) {
-    const dt = new Date(iso);             // UTC time from DB
-    const istOffsetMin = 330;             // IST = UTC+5:30
-    const utcMs = dt.getTime() - istOffsetMin * 60 * 1000; // shift to “IST clock” in UTC space
-    const d = new Date(utcMs);
-    const y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
-    const startUtc = new Date(Date.UTC(y, m, day, 18, 30));       // 00:00 IST
-    const endUtc   = new Date(Date.UTC(y, m, day + 1, 18, 30));   // 24:00 IST
-    const istDateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return { istDate: istDateStr, startUtc: startUtc.toISOString(), endUtc: endUtc.toISOString() };
-}
-
-/** Normalize preferences:
- * - If server returned array rows [{preference_type, preference_value, ...}], fold into buckets
- * - If server already returned {newspapers, sections, topics}, pass through
- */
-function normalizePrefs(prefsPayload) {
-    if (!prefsPayload) return { newspapers: [], sections: [], topics: [] };
-    if (Array.isArray(prefsPayload)) {
-        const out = { newspapers: [], sections: [], topics: [] };
-        for (const r of prefsPayload) {
-            if (r.preference_type === 'newspaper') out.newspapers.push(r.preference_value);
-            else if (r.preference_type === 'section') out.sections.push(r.preference_value);
-            else if (r.preference_type === 'topic') out.topics.push(r.preference_value);
-        }
-        return out;
-    }
-    // already normalized
-    return {
-        newspapers: prefsPayload.newspapers || [],
-        sections: prefsPayload.sections || [],
-        topics: prefsPayload.topics || [],
-    };
-}
+const PAGE_SIZE = 20;
 
 export default function ShortReads() {
-    const [loading, setLoading] = useState(true);
-    const [label, setLabel] = useState('Short reads');
-    const [prefs, setPrefs] = useState({ newspapers: [], sections: [], topics: [] });
+    // Data State
     const [articles, setArticles] = useState([]);
-    const [expanded, setExpanded] = useState({}); // { [article_id]: true }
+    const [prefs, setPrefs] = useState(null);
 
-    // 1) Load user preferences
+    // Pagination & Logic State
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loading, setLoading] = useState(true); // Initial load
+    const [fetchingMore, setFetchingMore] = useState(false); // Scroll load
+    const [isFallback, setIsFallback] = useState(false); // True if prefs yielded 0 results
+
+    const [expanded, setExpanded] = useState({});
+
+    // 1. Load User Preferences on Mount
     useEffect(() => {
-        (async () => {
+        const init = async () => {
             try {
-                const data = await fetchJSON('/preferences'); // your existing route
-                // data: { success, preferences: rows[] } or normalized object (if you change it later)
-                const norm = normalizePrefs(data?.preferences);
-                setPrefs(norm);
-            } catch (err) {
-                console.error('Failed to fetch preferences:', err);
-                setPrefs({ newspapers: [], sections: [], topics: [] });
+                const data = await preferencesService.getPreferences();
+                let sources = [], sections = [];
+
+                // Normalize data structure
+                if(Array.isArray(data)) {
+                    data.forEach(p => {
+                        if(p.preference_type === 'newspaper') sources.push(p.preference_value);
+                        if(p.preference_type === 'section') sections.push(p.preference_value);
+                    });
+                } else {
+                    sources = data.newspapers || [];
+                    sections = data.sections || [];
+                }
+                setPrefs({ sources, sections });
+            } catch (e) {
+                console.error("Prefs load error", e);
+                setPrefs({ sources: [], sections: [] });
             }
-        })();
+        };
+        init();
     }, []);
 
-    // 2) Load latest-available-day feed based on prefs; fallback to general feed (recent 50)
+    // 2. Fetch Logic (Triggered when prefs load OR offset changes)
     useEffect(() => {
-        (async () => {
-            setLoading(true);
+        if (!prefs) return; // Wait for prefs to be ready
+
+        const fetchArticles = async () => {
+            // Determine if we are doing an initial load or a "load more"
+            const isInitial = offset === 0;
+            if (isInitial) setLoading(true);
+            else setFetchingMore(true);
+
             try {
-                const sections = prefs.sections || [];
-                const sources  = prefs.newspapers || [];
+                // Construct Query Params
+                const p = new URLSearchParams();
+                p.set('limit', PAGE_SIZE.toString());
+                p.set('offset', offset.toString());
 
-                const qs = (obj) => {
-                    const p = new URLSearchParams();
-                    if (obj.sections?.length) p.set('sections', obj.sections.join(','));
-                    if (obj.sources?.length)  p.set('sources',  obj.sources.join(','));
-                    if (obj.startUtc) p.set('startUtc', obj.startUtc);
-                    if (obj.endUtc)   p.set('endUtc',   obj.endUtc);
-                    return `?${p.toString()}`;
-                };
+                // Apply prefs ONLY if we are NOT in fallback mode
+                // AND we actually have preferences to apply
+                const shouldUsePrefs = !isFallback && (prefs.sources.length > 0 || prefs.sections.length > 0);
 
-                // Probe across all time to find newest matching article (server orders by created_at DESC)
-                const wideStart = '1970-01-01T00:00:00.000Z';
-                const wideEnd   = '2100-01-01T00:00:00.000Z';
-                const probe = await fetchJSON(`/articles/search${qs({ sections, sources, startUtc: wideStart, endUtc: wideEnd })}`);
+                if (shouldUsePrefs) {
+                    if (prefs.sections.length) p.set('sections', prefs.sections.join(','));
+                    if (prefs.sources.length)  p.set('sources', prefs.sources.join(','));
+                }
 
-                if (Array.isArray(probe) && probe.length > 0) {
-                    // Found matches → load that whole IST day
-                    const latestIso = probe[0].created_at;
-                    const { istDate, startUtc, endUtc } = istDayBoundsFromIso(latestIso);
-                    const dayRows = await fetchJSON(`/articles/search${qs({ sections, sources, startUtc, endUtc })}`);
-                    setArticles(dayRows || []);
-                    setLabel(`Short reads — ${istDate}`);
+                // API Call
+                const data = await fetchJSON(`/articles/search?${p.toString()}`);
+
+                // --- Fallback Logic (Only on first page) ---
+                if (isInitial && data.length === 0 && shouldUsePrefs) {
+                    console.log("No matches for preferences. Switching to Fallback Mode (Latest News).");
+                    setIsFallback(true);
+                    // We don't need to do anything else;
+                    // changing isFallback to true will trigger this useEffect again automatically
+                    // because isFallback is in the dependency array (implicitly via logic flow? No, we need to force it).
+                    // Actually, safer to just recurse call immediately to avoid flicker:
+                    return retryFallback();
+                }
+
+                // Normal Data Handling
+                if (data.length < PAGE_SIZE) {
+                    setHasMore(false);
+                }
+
+                if (isInitial) {
+                    setArticles(data);
                 } else {
-                    // Fallback: general feed (most recent 50 across everything)
-                    const general = await fetchJSON(`/articles/search${qs({ startUtc: wideStart, endUtc: wideEnd })}`);
-                    setArticles((general || []).slice(0, 50));
-                    setLabel('general feed');
+                    // Filter duplicates just in case offset drifted
+                    setArticles(prev => {
+                        const existingIds = new Set(prev.map(a => a.article_id));
+                        const newItems = data.filter(a => !existingIds.has(a.article_id));
+                        return [...prev, ...newItems];
+                    });
                 }
+
             } catch (err) {
-                console.error('Failed to load short reads:', err);
-                try {
-                    // Robust fallback to general feed
-                    const fallback = await fetchJSON('/articles/search?startUtc=1970-01-01T00:00:00.000Z&endUtc=2100-01-01T00:00:00.000Z');
-                    setArticles((fallback || []).slice(0, 50));
-                    setLabel('general feed');
-                } catch {
-                    setArticles([]);
-                    setLabel('general feed');
-                }
+                console.error("Fetch error:", err);
+            } finally {
+                setLoading(false);
+                setFetchingMore(false);
+            }
+        };
+
+        const retryFallback = async () => {
+            // Manual fallback fetch (offset 0, no prefs)
+            try {
+                const p = new URLSearchParams();
+                p.set('limit', PAGE_SIZE.toString());
+                p.set('offset', '0');
+                const data = await fetchJSON(`/articles/search?${p.toString()}`);
+                setArticles(data);
+                if(data.length < PAGE_SIZE) setHasMore(false);
             } finally {
                 setLoading(false);
             }
-        })();
-        // Trigger when prefs change
-    }, [prefs.sections.join(','), prefs.newspapers.join(',')]);
+        };
 
+        fetchArticles();
+
+    }, [prefs, offset, isFallback]);
+
+
+    // 3. Infinite Scroll Observer
+    // This ref is attached to the LAST element in the list.
+    const observer = useRef();
+    const lastArticleElementRef = useCallback(node => {
+        if (loading || fetchingMore) return;
+        if (observer.current) observer.current.disconnect();
+
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMore) {
+                setOffset(prevOffset => prevOffset + PAGE_SIZE);
+            }
+        });
+
+        if (node) observer.current.observe(node);
+    }, [loading, fetchingMore, hasMore]);
+
+
+    // --- UI Render Helpers ---
     const header = useMemo(() => (
         <>
-            <div className="kicker">{label}</div>
-            <h2 className="headline text-2xl">Skim the paper</h2>
-            <div className="rule mb-2" />
+            <div className="kicker">
+                {isFallback ? 'Global Feed' : 'Your Briefing'}
+            </div>
+            <h2 className="headline text-2xl">
+                {isFallback ? 'Top Stories' : 'Short reads'}
+            </h2>
+            {isFallback && (
+                <p className="byline mb-2">
+                    We couldn't find fresh news matching your specific filters today, so here are the latest top stories.
+                </p>
+            )}
+            <div className="rule mb-4" />
         </>
-    ), [label]);
+    ), [isFallback]);
 
-    if (loading) {
+    if (loading && offset === 0) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-4 pt-2">
                 {header}
-                <div className="byline">Loading…</div>
+                <div className="animate-pulse space-y-4">
+                    {[1,2,3].map(i => (
+                        <div key={i} className="h-32 bg-slate-200 dark:bg-white/5 rounded-xl border rule" />
+                    ))}
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-4">
-            <div>
-
-            </div>
+        <div className="space-y-4 pb-10">
             {header}
-            {articles.length === 0 && (
+
+            {articles.length === 0 && !loading && (
                 <div className="byline">No articles available right now.</div>
             )}
-            {articles.map(a => {
+
+            {articles.map((a, index) => {
                 const id = a.article_id;
                 const isOpen = !!expanded[id];
                 const text = a.description || '';
-                const preview = text.slice(0, 240);
-                const sectionsAgg = Array.isArray(a.sections) && a.sections.length ? a.sections.join(', ') : (a.section || '');
+                const preview = text.slice(0, 180);
+                const isLong = text.length > 180;
+                const isLastElement = index === articles.length - 1;
+
+                // --- NEW TIME LOGIC ---
+                const timeAgo = (() => {
+                    if (!a.created_at) return '';
+                    const date = new Date(a.created_at);
+                    const now = new Date();
+                    const diffMs = now - date;
+                    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+
+                    if (diffHrs < 1) return 'Just now';
+                    if (diffHrs < 24) return `${diffHrs}h ago`;
+                    return date.toLocaleDateString(); // e.g. 11/24/2025
+                })();
+                // ----------------------
 
                 return (
-                    <article key={id} className="rounded-xl border rule bg-white/80 dark:bg-black/30 p-4">
-                        <div className="kicker">
-                            {a.news_source}{sectionsAgg ? ` • ${sectionsAgg}` : ''}
-                        </div>
-                        <h3 className="headline text-lg">{a.title}</h3>
+                    <article
+                        ref={isLastElement ? lastArticleElementRef : null}
+                        key={`${id}-${index}`}
+                        className="rounded-xl border rule bg-white/80 dark:bg-black/30 p-4 transition-all"
+                    >
+                        <div className="flex justify-between items-start">
+                            <div className="kicker mb-1">
+                                {a.news_source}
+                                {a.sections && a.sections.length > 0 && ` • ${a.sections[0]}`}
+                            </div>
 
-                        <p className="mt-2 text-sm text-slate-700 dark:text-amber-50/80">
-                            {isOpen ? (text || '—') : (preview + (text.length > 240 ? '…' : ''))}
+                            {/* UPDATED DISPLAY */}
+                            <div className="byline">{timeAgo}</div>
+                        </div>
+
+                        <h3 className="headline text-lg mb-2">{a.title}</h3>
+
+                        <p className="text-sm text-slate-700 dark:text-[#a8a49d] leading-relaxed">
+                            {isOpen ? text : `${preview}${isLong ? '...' : ''}`}
                         </p>
 
-                        {text.length > 240 && (
+                        {isLong && (
                             <button
                                 onClick={() => setExpanded(prev => ({ ...prev, [id]: !isOpen }))}
-                                className="inline-block mt-3 underline text-sm"
+                                className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
                             >
-                                {isOpen ? 'Show less ↑' : 'Read full article →'}
+                                {isOpen ? 'Show Less' : 'Read More'}
                             </button>
                         )}
                     </article>
                 );
             })}
+
+            {fetchingMore && (
+                <div className="text-center py-4 byline animate-pulse">
+                    Loading older articles...
+                </div>
+            )}
+
+            {!hasMore && articles.length > 0 && (
+                <div className="text-center py-6 byline">
+                    You're all caught up.
+                </div>
+            )}
         </div>
     );
 }

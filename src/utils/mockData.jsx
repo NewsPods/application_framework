@@ -1,14 +1,19 @@
 export const newspapers = [
+    // Existing
     { id: 'guardian', name: 'The Guardian', icon: '📰' },
     { id: 'bbc', name: 'BBC News', icon: '🎛️' },
     { id: 'reuters', name: 'Reuters', icon: '🌍' },
     { id: 'indianexpress', name: 'The Indian Express', icon: '🇮🇳' },
     { id: 'dBhaskar', name: 'Dainik Bhaskar', icon: '🗞️' },
     { id: 'wsj', name: 'Wall Street Journal', icon: '💼' },
-    { id: 'nyt', name: 'New York Times', icon: '🗽' }
+    { id: 'nyt', name: 'New York Times', icon: '🗽' },
+
+    // Added from your Database/Screenshots
+    { id: 'toi', name: 'Times of India', icon: '🇮🇳' }
 ];
 
 export const sections = [
+    // Existing
     { id: 'home', name: 'Home' },
     { id: 'politics', name: 'Politics' },
     { id: 'finance', name: 'Finance' },
@@ -17,6 +22,14 @@ export const sections = [
     { id: 'entertainment', name: 'Entertainment' },
     { id: 'science', name: 'Science' },
     { id: 'world', name: 'World' },
+
+    // Added from your Database/Screenshots
+    { id: 'india', name: 'India' },
+    { id: 'top_stories', name: 'Top Stories' },
+    { id: 'education', name: 'Education' },
+    { id: 'cricket', name: 'Cricket' },
+    { id: 'business', name: 'Business' },
+    { id: 'tech_science', name: 'Tech-Science' }
 ];
 
 export const topicSuggestions = [

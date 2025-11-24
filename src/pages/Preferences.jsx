@@ -164,7 +164,7 @@ export default function Preferences() {
                 </div>
             </section>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end mb-16">
                 <button
                     onClick={save}
                     className="px-4 py-3 rounded-lg bg-slate-900 text-white dark:bg-amber-500 dark:text-black"

@@ -1,43 +1,91 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Merriweather:wght@400;700;900&display=swap');
-/* Tailwind (assumes already configured in your project) */
+/* Import fonts: Inter (UI), Merriweather (Body), Playfair Display (Headlines) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:wght@600;700;800&display=swap');
+
+/* Tailwind */
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
-/* Google Fonts for the newspaper vibe */
-
 
 @layer base {
     html, body, #root { height: 100%; }
+
     body {
-        @apply text-slate-900 dark:text-slate-100;
+        /* Light: Deep Ink (#1a1a1a) | Dark: Bone White (#e0dcd3) */
+        @apply text-[#1a1a1a] dark:text-[#e0dcd3];
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
         background: transparent;
     }
-    h1,h2,h3,h4,.serif { font-family: Merriweather, Georgia, 'Times New Roman', serif; }
+
+    /* Headlines: Playfair Display for that bold editorial look */
+    h1, h2, h3, h4 {
+        font-family: 'Playfair Display', Georgia, serif;
+        @apply tracking-tight;
+    }
+
+    /* Subheadings/Accents: Merriweather */
+    .serif {
+        font-family: Merriweather, Georgia, serif;
+    }
 }
 
-/* Paper textures using pure CSS (no images) */
+/* Paper textures using pure CSS */
 @layer utilities {
     .bg-paper {
-        /* 1. Default (Light) Background */
-        background:
-                radial-gradient(100% 100% at 50% 0%, rgba(255,255,255,0.9), rgba(248,250,252,0.95) 60%, rgba(241,245,249,0.98)),
-                repeating-linear-gradient(0deg, rgba(2,6,23,0.03), rgba(2,6,23,0.03) 1px, transparent 1px, transparent 28px),
-                repeating-linear-gradient(90deg, rgba(2,6,23,0.02), rgba(2,6,23,0.02) 1px, transparent 1px, transparent 24px);
+        /* 1. Light Mode: Authentic Newsprint */
+        background-color: #fdfbf7; /* Warm cream base */
+
+        background-image:
+            /* Subtle grain texture */
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E"),
+                    /* Faint vertical column guides (very subtle) */
+                repeating-linear-gradient(90deg, rgba(0,0,0,0.015), rgba(0,0,0,0.015) 1px, transparent 1px, transparent 24px);
     }
 
-    /* 2. Dark Mode Override */
-    /* This selector says: "If .bg-paper is inside an element with .dark class" */
+    /* 2. Dark Mode Override: "Aged Ink" */
     :is(.dark .bg-paper) {
-        background:
-                radial-gradient(100% 140% at 50% -20%, rgba(120,53,15,0.35), rgba(15,23,42,0.9) 70%),
-                repeating-linear-gradient(0deg, rgba(249,115,22,0.05), rgba(249,115,22,0.05) 1px, transparent 1px, transparent 24px),
-                linear-gradient(180deg, #0b0f1a, #0b0f1a);
+        /* Warm Charcoal Background */
+        background-color: #23211f;
+
+        background-image:
+            /* Subtle grain texture (lighter opacity for dark mode) */
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E"),
+                    /* Faint white column guides */
+                repeating-linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 1px, transparent 1px, transparent 24px);
     }
+
+    /* Typography Utilities */
+
     .masthead {
-        @apply font-serif font-black tracking-tight text-3xl sm:text-4xl; letter-spacing: 0.02em;
+        /* App Name Style */
+        font-family: 'Playfair Display', serif;
+        @apply font-black text-3xl sm:text-4xl;
+        letter-spacing: -0.03em;
     }
-    .kicker { @apply uppercase tracking-widest text-[11px] font-semibold text-slate-500 dark:text-amber-300/70; }
-    .headline { @apply font-serif text-xl font-bold leading-snug; }
-    .byline { @apply text-xs text-slate-500 dark:text-amber-200/60; }
-    .rule { @apply border-t border-slate-300/60 dark:border-amber-800/40; }
+
+    .kicker {
+        /* The small category tag above headlines */
+        @apply uppercase tracking-widest text-[11px] font-bold;
+        /* Light: Deep Editorial Red | Dark: Muted Brick Red */
+        @apply text-[#8b0000] dark:text-[#c05b4d];
+    }
+
+    .headline {
+        font-family: 'Playfair Display', serif;
+        @apply text-xl font-bold leading-snug;
+        /* Light: Pitch Black | Dark: Soft White */
+        @apply text-black dark:text-[#f0efe9];
+    }
+
+    .byline {
+        /* Metadata (dates, times) */
+        @apply text-xs font-serif italic;
+        /* Light: Dark Grey Ink | Dark: Warm Grey */
+        @apply text-[#595959] dark:text-[#a8a49d];
+    }
+
+    .rule {
+        /* Section dividers */
+        @apply border-t;
+        /* Light: Light Grey Ink | Dark: Charcoal Border */
+        @apply border-[#dcd6ce] dark:border-[#3e3b38];
+    }
 }
