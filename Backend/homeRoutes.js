@@ -4,10 +4,9 @@ const { auth } = require('./authMiddleware');
 
 router.get('/feed', auth, async (req, res) => {
     const userId = req.userId;
-    const TARGET_DATE = '2025-11-25'; // Hardcoded as requested
+    const TARGET_DATE = '2025-11-25';
 
     try {
-        // --- 1. Get User Preferences ---
         const prefSql = `
             SELECT
                 array_agg(DISTINCT preference_value) FILTER (WHERE preference_type = 'newspaper') as my_sources,
@@ -20,7 +19,7 @@ router.get('/feed', auth, async (req, res) => {
         const mySources = prefs.my_sources || [];
         const mySections = prefs.my_sections || [];
 
-        // --- 2. Fetch All Audio Articles for Date ---
+        // CHANGED: Added 'a.word_timestamps' to the SELECT list
         const articlesSql = `
             SELECT DISTINCT ON (a.article_id)
                 a.article_id,
@@ -29,47 +28,44 @@ router.get('/feed', auth, async (req, res) => {
                 a.news_source,
                 a.created_at,
                 a.audio_duration_seconds,
-                a.audio_key, -- This contains "audio/hls/.../index.m3u8"
+                a.audio_key,
+                a.word_timestamps,  -- 👈 NEW COLUMN
                 (SELECT array_agg(s.news_section) FROM articles_sections s WHERE s.article_id = a.article_id) as sections
             FROM articles a
-            LEFT JOIN articles_sections sec ON a.article_id = sec.article_id
-            WHERE 
-                a.created_at::date = $1::date 
-                AND a.audio_key IS NOT NULL
+                LEFT JOIN articles_sections sec ON a.article_id = sec.article_id
+            WHERE
+                a.created_at::date = $1::date
+              AND a.audio_key IS NOT NULL
         `;
 
         const { rows: allArticles } = await req.db.query(articlesSql, [TARGET_DATE]);
 
-        // --- 3. Process Data ---
+        // Helper to pass data through
+        const processArticle = (a) => ({
+            ...a,
+            hlsPath: a.audio_key,
+            // Ensure timestamps are parsed if they come as a string from DB driver
+            word_timestamps: typeof a.word_timestamps === 'string' ? JSON.parse(a.word_timestamps) : a.word_timestamps
+        });
 
-        // Helper to ensure we don't pass null paths
-        const getPath = (a) => a.audio_key || null;
-
-        // A. Daily Digest (Preference Match)
         let dailyDigest = allArticles.filter(a => {
             if (mySources.length === 0 && mySections.length === 0) return true;
             const sourceMatch = mySources.includes(a.news_source);
             const sectionMatch = a.sections && a.sections.some(s => mySections.includes(s));
             return sourceMatch || sectionMatch;
         });
+        dailyDigest = dailyDigest.map(processArticle);
 
-        // Map to include hlsPath (DIRECTLY from DB now)
-        dailyDigest = dailyDigest.map(a => ({ ...a, hlsPath: getPath(a) }));
-
-        // B. Top News (Random 4)
         const shuffled = [...allArticles].sort(() => 0.5 - Math.random());
-        const topNews = shuffled.slice(0, 4).map(a => ({ ...a, hlsPath: getPath(a) }));
+        const topNews = shuffled.slice(0, 4).map(processArticle);
 
-        // C. Section Episodes
         const sectionEpisodes = {};
-
         allArticles.forEach(a => {
             if (!a.sections) return;
             a.sections.forEach(sect => {
                 if (mySections.length > 0 && !mySections.includes(sect)) return;
                 if (!sectionEpisodes[sect]) sectionEpisodes[sect] = [];
-                // Use DB value directly
-                sectionEpisodes[sect].push({ ...a, hlsPath: getPath(a) });
+                sectionEpisodes[sect].push(processArticle(a));
             });
         });
 

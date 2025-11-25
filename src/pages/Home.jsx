@@ -42,23 +42,17 @@ export default function Home() {
         loading.show('Stitching audio...');
         try {
             const API_BASE = import.meta.env.VITE_API_URL;
-
-            // Extract HLS paths
             const playlistPaths = articles.map(a => a.hlsPath).filter(Boolean);
 
             if (playlistPaths.length === 0) {
-                alert("Audio not available for these articles.");
+                alert("Audio not available.");
                 return;
             }
 
-            // Get Stitcher URL
             const res = await axios.post(`${API_BASE}/episodes/hls`, { playlistPaths });
             const episodeUrl = res.data.episodeUrl;
-
-            // Calculate Metadata
             const totalDuration = articles.reduce((sum, a) => sum + (a.audio_duration_seconds || 0), 0);
 
-            // Map to Player Segment format
             const segments = [];
             articles.forEach((a, i) => {
                 segments.push({
@@ -66,9 +60,10 @@ export default function Home() {
                     title: a.title,
                     newspaper: a.news_source,
                     section: a.sections?.[0] || 'News',
-                    duration: a.audio_duration_seconds || 0
+                    duration: a.audio_duration_seconds || 0,
+                    // CHANGED: Pass timestamps to the player atom
+                    word_timestamps: a.word_timestamps || []
                 });
-                // Add transition logic if needed (backend handles audio silence, UI just needs to know)
                 if (i < articles.length - 1) {
                     segments.push({ type: 'transition', duration: 2 });
                 }
@@ -85,7 +80,7 @@ export default function Home() {
 
         } catch (e) {
             console.error("Play failed", e);
-            alert("Could not play audio. Check connection.");
+            alert("Could not play audio.");
         } finally {
             loading.hide();
         }
