@@ -11,6 +11,8 @@ const hlsRoutes = require('./hlsRoutes');
 
 const app = express();
 
+app.enable('trust proxy');
+
 // reflect any origin + allow credentials (dev-wide-open)
 const corsOptions = {
     origin: (origin, cb) => cb(null, true),
