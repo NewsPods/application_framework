@@ -29,13 +29,13 @@ router.get('/feed', auth, async (req, res) => {
                 a.news_source,
                 a.created_at,
                 a.audio_duration_seconds,
-                a.audio_file_name, -- This contains "audio/hls/.../index.m3u8"
+                a.audio_key, -- This contains "audio/hls/.../index.m3u8"
                 (SELECT array_agg(s.news_section) FROM articles_sections s WHERE s.article_id = a.article_id) as sections
             FROM articles a
             LEFT JOIN articles_sections sec ON a.article_id = sec.article_id
             WHERE 
                 a.created_at::date = $1::date 
-                AND a.audio_file_name IS NOT NULL
+                AND a.audio_key IS NOT NULL
         `;
 
         const { rows: allArticles } = await req.db.query(articlesSql, [TARGET_DATE]);
@@ -43,7 +43,7 @@ router.get('/feed', auth, async (req, res) => {
         // --- 3. Process Data ---
 
         // Helper to ensure we don't pass null paths
-        const getPath = (a) => a.audio_file_name || null;
+        const getPath = (a) => a.audio_key || null;
 
         // A. Daily Digest (Preference Match)
         let dailyDigest = allArticles.filter(a => {
