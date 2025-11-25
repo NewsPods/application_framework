@@ -47,7 +47,7 @@ app.use('/api/auth', authRoutes);
 
 app.use('/api/auth', passwordResetRoutes);
 
-app.use('/api/feed', homeRoutes);
+app.use('/api/home', homeRoutes);
 
 app.use('/api/preferences', preferencesRoutes);
 
