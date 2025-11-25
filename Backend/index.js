@@ -8,6 +8,7 @@ const preferencesRoutes = require('./preferencesRoutes');
 const passwordResetRoutes = require('./passwordResetRoutes');
 const articlesRoutes = require('./articlesRoutes');
 const hlsRoutes = require('./hlsRoutes');
+const homeRoutes = require('./homeRoutes')
 
 const app = express();
 
@@ -45,6 +46,8 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 
 app.use('/api/auth', passwordResetRoutes);
+
+app.use('/api/feed', homeRoutes);
 
 app.use('/api/preferences', preferencesRoutes);
 
