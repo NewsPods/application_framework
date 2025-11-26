@@ -16,8 +16,8 @@ export default function NowPlaying() {
     const [isPlaying, setIsPlaying] = useAtom(isPlayingAtom);
     const [speed, setSpeed] = useAtom(playbackSpeedAtom);
 
-    // Refs for auto-scrolling the subtitles
-    const activeWordRef = useRef(null);
+    // Refs for auto-scrolling
+    const activeSentenceRef = useRef(null);
     const subtitleContainerRef = useRef(null);
 
     // 1. Empty State
@@ -35,12 +35,11 @@ export default function NowPlaying() {
     const realDuration = track.duration || 0;
     const isMetadataLoaded = realDuration > 1;
 
-    // 2. Smart Segmentation (with scale factor logic)
+    // 2. Smart Segmentation (Queue Logic)
     const { segmentsWithTiming, scaleFactor } = useMemo(() => {
         if (!track.segments) return { segmentsWithTiming: [], scaleFactor: 1 };
 
         const estimatedTotal = track.segments.reduce((acc, s) => acc + (s.duration || 0), 0);
-        // Prevent divide by zero or huge skews
         const factor = (estimatedTotal > 0 && isMetadataLoaded) ? (realDuration / estimatedTotal) : 1;
 
         let accumulated = 0;
@@ -59,20 +58,59 @@ export default function NowPlaying() {
         ? segmentsWithTiming.find(s => pos >= s.start && pos < s.end) || segmentsWithTiming[0]
         : segmentsWithTiming[0];
 
-    // 4. Calculate "Relative Time" inside the article for subtitles
-    // We un-scale the time so it matches the original JSON timestamps
+    // 4. Calculate "Relative Time" for subtitles
     const relativeTime = Math.max(0, (pos - currentSegment.start)) / scaleFactor;
 
-    // 5. Auto-Scroll Effect
+    // 5. SENTENCE AGGREGATION LOGIC (New!)
+    // Transforms raw word list -> sentences with start/end times
+    const sentences = useMemo(() => {
+        const words = currentSegment?.word_timestamps || [];
+        if (words.length === 0) return [];
+
+        const result = [];
+        let currentSentenceWords = [];
+        let sentenceStartTime = words[0]?.start || 0;
+
+        words.forEach((w, i) => {
+            currentSentenceWords.push(w.text);
+
+            // Check if word ends with punctuation or if it's the last word
+            const isEnd = ['.', '?', '!'].some(p => w.text.includes(p)) || i === words.length - 1;
+
+            if (isEnd) {
+                const endTime = w.start + (w.duration || 0);
+                // Join words, fixing spaces before punctuation (e.g. "Hello ." -> "Hello.")
+                const text = currentSentenceWords.join(' ').replace(/ ([.,!?])/g, '$1');
+
+                result.push({
+                    text,
+                    start: sentenceStartTime,
+                    end: endTime + 0.2 // Add slight buffer
+                });
+
+                // Reset for next sentence
+                currentSentenceWords = [];
+                sentenceStartTime = words[i + 1]?.start || endTime;
+            }
+        });
+        return result;
+    }, [currentSegment]);
+
+    // 6. Identify Active Sentence
+    const activeSentenceIndex = sentences.findIndex(
+        s => relativeTime >= s.start && relativeTime < s.end
+    );
+
+    // 7. Auto-Scroll Effect
     useEffect(() => {
-        if (activeWordRef.current && subtitleContainerRef.current) {
-            activeWordRef.current.scrollIntoView({
+        if (activeSentenceRef.current && subtitleContainerRef.current) {
+            activeSentenceRef.current.scrollIntoView({
                 behavior: 'smooth',
                 block: 'center',
-                inline: 'center'
+                inline: 'nearest'
             });
         }
-    }, [Math.floor(relativeTime)]); // Throttle scrolling to once per second-ish to avoid jitter
+    }, [activeSentenceIndex]); // Only scroll when the sentence changes
 
     // --- Helpers ---
     const fmt = (s) => !Number.isFinite(s) || s < 0 ? '--:--' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -85,13 +123,11 @@ export default function NowPlaying() {
     };
 
     const handleSkip = (sec) => isMetadataLoaded && setPos(Math.min(Math.max(0, pos + sec), realDuration));
-
     const jumpToSegment = (seg) => {
         if (!isMetadataLoaded) return;
         setPos(seg.start + 0.1);
         if (!isPlaying) setIsPlaying(true);
     };
-
     const cycleSpeed = () => {
         const speeds = [1, 1.2, 1.5, 2.0];
         setSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length] || 1);
@@ -118,58 +154,51 @@ export default function NowPlaying() {
                 </div>
             </div>
 
-            {/* --- SUBTITLES BOX (Teleprompter) --- */}
-            <div
-                className="h-56 rounded-xl border rule bg-[#fdfbf7] dark:bg-[#23211f] relative overflow-hidden shadow-inner"
-            >
+            {/* --- TELEPROMPTER BOX --- */}
+            <div className="h-64 relative rounded-xl border rule bg-[#fdfbf7] dark:bg-[#23211f] overflow-hidden shadow-inner">
                 <div
                     ref={subtitleContainerRef}
-                    className="absolute inset-0 overflow-y-auto p-6 text-center space-y-4 no-scrollbar"
+                    className="absolute inset-0 overflow-y-auto px-6 py-4 no-scrollbar"
                 >
-                    {/* TRANSITION STATE */}
-                    {!isMetadataLoaded ? (
-                        <div className="h-full flex items-center justify-center">
-                            <div className="w-6 h-6 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"/>
-                        </div>
-                    ) : currentSegment?.type === 'transition' ? (
-                        <div className="h-full flex items-center justify-center">
+                    {/* Add huge padding so the first/last sentences can still be centered */}
+                    <div className="pt-[80px] pb-[80px] space-y-6 text-center">
+
+                        {!isMetadataLoaded ? (
+                            <div className="flex justify-center"><div className="w-6 h-6 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"/></div>
+                        ) : currentSegment?.type === 'transition' ? (
                             <p className="italic text-slate-400 font-serif text-lg animate-pulse">Next story loading...</p>
-                        </div>
-                    ) : currentSegment?.word_timestamps?.length > 0 ? (
-                        // REAL SUBTITLES
-                        <p className="serif text-lg leading-loose text-slate-400 dark:text-slate-600 transition-colors duration-300">
-                            {currentSegment.word_timestamps.map((w, i) => {
-                                // Check if this word is currently spoken
-                                const isActive = relativeTime >= w.start && relativeTime < (w.start + (w.duration || 0.5));
+                        ) : sentences.length > 0 ? (
+                            sentences.map((s, i) => {
+                                const isActive = i === activeSentenceIndex;
+                                const isPast = i < activeSentenceIndex;
+
                                 return (
-                                    <span
+                                    <p
                                         key={i}
-                                        ref={isActive ? activeWordRef : null}
+                                        ref={isActive ? activeSentenceRef : null}
                                         className={`
-                                            mx-1 px-1 rounded transition-all duration-200
+                                            serif text-lg leading-relaxed transition-all duration-500 ease-out
                                             ${isActive
-                                            ? 'bg-yellow-200 dark:bg-[#c05b4d]/40 text-black dark:text-[#e0dcd3] font-bold scale-110 inline-block shadow-sm'
-                                            : ''
+                                            ? 'text-slate-900 dark:text-[#e0dcd3] scale-105 font-medium opacity-100'
+                                            : 'text-slate-400 dark:text-slate-600 scale-95 opacity-40 blur-[0.5px]'
                                         }
                                         `}
                                     >
-                                        {w.text}
-                                    </span>
+                                        {s.text}
+                                    </p>
                                 );
-                            })}
-                        </p>
-                    ) : (
-                        // FALLBACK IF NO SUBTITLES
-                        <div className="h-full flex items-center justify-center">
+                            })
+                        ) : (
                             <p className="serif text-xl leading-relaxed text-slate-800 dark:text-[#e0dcd3] opacity-80">
                                 "{currentSegment?.title}"
                             </p>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
-                {/* Fade overlays for visual polish */}
-                <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-white/90 dark:from-[#23211f]/90 to-transparent pointer-events-none"/>
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white/90 dark:from-[#23211f]/90 to-transparent pointer-events-none"/>
+
+                {/* Fade Gradients */}
+                <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-[#fdfbf7] dark:from-[#23211f] to-transparent pointer-events-none"/>
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#fdfbf7] dark:from-[#23211f] to-transparent pointer-events-none"/>
             </div>
 
             {/* --- Controls --- */}

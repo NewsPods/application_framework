@@ -23,6 +23,10 @@ async function fetchJSON(path, opts = {}) {
 
 const PAGE_SIZE = 20;
 
+// --- HARDCODED DATE RANGE ---
+const TARGET_START = '2025-11-25T00:00:00.000Z';
+const TARGET_END   = '2025-11-25T23:59:59.999Z';
+
 export default function ShortReads() {
     // Data State
     const [articles, setArticles] = useState([]);
@@ -31,9 +35,9 @@ export default function ShortReads() {
     // Pagination & Logic State
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
-    const [loading, setLoading] = useState(true); // Initial load
-    const [fetchingMore, setFetchingMore] = useState(false); // Scroll load
-    const [isFallback, setIsFallback] = useState(false); // True if prefs yielded 0 results
+    const [loading, setLoading] = useState(true);
+    const [fetchingMore, setFetchingMore] = useState(false);
+    const [isFallback, setIsFallback] = useState(false);
 
     const [expanded, setExpanded] = useState({});
 
@@ -44,7 +48,6 @@ export default function ShortReads() {
                 const data = await preferencesService.getPreferences();
                 let sources = [], sections = [];
 
-                // Normalize data structure
                 if(Array.isArray(data)) {
                     data.forEach(p => {
                         if(p.preference_type === 'newspaper') sources.push(p.preference_value);
@@ -63,24 +66,25 @@ export default function ShortReads() {
         init();
     }, []);
 
-    // 2. Fetch Logic (Triggered when prefs load OR offset changes)
+    // 2. Fetch Logic
     useEffect(() => {
-        if (!prefs) return; // Wait for prefs to be ready
+        if (!prefs) return;
 
         const fetchArticles = async () => {
-            // Determine if we are doing an initial load or a "load more"
             const isInitial = offset === 0;
             if (isInitial) setLoading(true);
             else setFetchingMore(true);
 
             try {
-                // Construct Query Params
                 const p = new URLSearchParams();
                 p.set('limit', PAGE_SIZE.toString());
                 p.set('offset', offset.toString());
 
+                // --- HARDCODED DATE PARAMS ---
+                p.set('startUtc', TARGET_START);
+                p.set('endUtc', TARGET_END);
+
                 // Apply prefs ONLY if we are NOT in fallback mode
-                // AND we actually have preferences to apply
                 const shouldUsePrefs = !isFallback && (prefs.sources.length > 0 || prefs.sections.length > 0);
 
                 if (shouldUsePrefs) {
@@ -88,21 +92,15 @@ export default function ShortReads() {
                     if (prefs.sources.length)  p.set('sources', prefs.sources.join(','));
                 }
 
-                // API Call
                 const data = await fetchJSON(`/articles/search?${p.toString()}`);
 
-                // --- Fallback Logic (Only on first page) ---
+                // Fallback Logic
                 if (isInitial && data.length === 0 && shouldUsePrefs) {
-                    console.log("No matches for preferences. Switching to Fallback Mode (Latest News).");
+                    console.log("No matches for preferences on target date. Switching to Fallback.");
                     setIsFallback(true);
-                    // We don't need to do anything else;
-                    // changing isFallback to true will trigger this useEffect again automatically
-                    // because isFallback is in the dependency array (implicitly via logic flow? No, we need to force it).
-                    // Actually, safer to just recurse call immediately to avoid flicker:
-                    return retryFallback();
+                    return;
                 }
 
-                // Normal Data Handling
                 if (data.length < PAGE_SIZE) {
                     setHasMore(false);
                 }
@@ -110,7 +108,6 @@ export default function ShortReads() {
                 if (isInitial) {
                     setArticles(data);
                 } else {
-                    // Filter duplicates just in case offset drifted
                     setArticles(prev => {
                         const existingIds = new Set(prev.map(a => a.article_id));
                         const newItems = data.filter(a => !existingIds.has(a.article_id));
@@ -126,27 +123,12 @@ export default function ShortReads() {
             }
         };
 
-        const retryFallback = async () => {
-            // Manual fallback fetch (offset 0, no prefs)
-            try {
-                const p = new URLSearchParams();
-                p.set('limit', PAGE_SIZE.toString());
-                p.set('offset', '0');
-                const data = await fetchJSON(`/articles/search?${p.toString()}`);
-                setArticles(data);
-                if(data.length < PAGE_SIZE) setHasMore(false);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchArticles();
 
     }, [prefs, offset, isFallback]);
 
 
     // 3. Infinite Scroll Observer
-    // This ref is attached to the LAST element in the list.
     const observer = useRef();
     const lastArticleElementRef = useCallback(node => {
         if (loading || fetchingMore) return;
@@ -162,7 +144,6 @@ export default function ShortReads() {
     }, [loading, fetchingMore, hasMore]);
 
 
-    // --- UI Render Helpers ---
     const header = useMemo(() => (
         <>
             <div className="kicker">
@@ -171,11 +152,7 @@ export default function ShortReads() {
             <h2 className="headline text-2xl">
                 {isFallback ? 'Top Stories' : 'Short reads'}
             </h2>
-            {isFallback && (
-                <p className="byline mb-2">
-                    We couldn't find fresh news matching your specific filters today, so here are the latest top stories.
-                </p>
-            )}
+            <div className="byline mb-4">From Nov 25, 2025</div>
             <div className="rule mb-4" />
         </>
     ), [isFallback]);
@@ -198,7 +175,7 @@ export default function ShortReads() {
             {header}
 
             {articles.length === 0 && !loading && (
-                <div className="byline">No articles available right now.</div>
+                <div className="byline">No articles available for this date.</div>
             )}
 
             {articles.map((a, index) => {
@@ -209,19 +186,11 @@ export default function ShortReads() {
                 const isLong = text.length > 180;
                 const isLastElement = index === articles.length - 1;
 
-                // --- NEW TIME LOGIC ---
+                // Calculate relative time string
                 const timeAgo = (() => {
                     if (!a.created_at) return '';
-                    const date = new Date(a.created_at);
-                    const now = new Date();
-                    const diffMs = now - date;
-                    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-
-                    if (diffHrs < 1) return 'Just now';
-                    if (diffHrs < 24) return `${diffHrs}h ago`;
-                    return date.toLocaleDateString(); // e.g. 11/24/2025
+                    return new Date(a.created_at).toLocaleDateString();
                 })();
-                // ----------------------
 
                 return (
                     <article
@@ -234,8 +203,6 @@ export default function ShortReads() {
                                 {a.news_source}
                                 {a.sections && a.sections.length > 0 && ` • ${a.sections[0]}`}
                             </div>
-
-                            {/* UPDATED DISPLAY */}
                             <div className="byline">{timeAgo}</div>
                         </div>
 
@@ -258,15 +225,11 @@ export default function ShortReads() {
             })}
 
             {fetchingMore && (
-                <div className="text-center py-4 byline animate-pulse">
-                    Loading older articles...
-                </div>
+                <div className="text-center py-4 byline animate-pulse">Loading older articles...</div>
             )}
 
             {!hasMore && articles.length > 0 && (
-                <div className="text-center py-6 byline">
-                    You're all caught up.
-                </div>
+                <div className="text-center py-6 byline">You're all caught up.</div>
             )}
         </div>
     );
