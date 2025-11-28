@@ -1,1 +1,0 @@
-export default function Subscription(){return <div className='p-4'>Subscription</div>}

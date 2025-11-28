@@ -103,14 +103,24 @@ export default function NowPlaying() {
 
     // 7. Auto-Scroll Effect
     useEffect(() => {
-        if (activeSentenceRef.current && subtitleContainerRef.current) {
-            activeSentenceRef.current.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-                inline: 'nearest'
+        const sent = activeSentenceRef.current;
+        const box = subtitleContainerRef.current;
+        if (!sent || !box) return;
+
+        requestAnimationFrame(() => {
+            const sentTop = sent.offsetTop;
+            const sentHeight = sent.offsetHeight;
+            const boxHeight = box.clientHeight;
+
+            const scrollTo = sentTop - (boxHeight / 2) + (sentHeight / 2);
+
+            box.scrollTo({
+                top: scrollTo,
+                behavior: 'smooth'
             });
-        }
-    }, [activeSentenceIndex]); // Only scroll when the sentence changes
+        });
+    }, [activeSentenceIndex]);
+    // Only scroll when the sentence changes
 
     // --- Helpers ---
     const fmt = (s) => !Number.isFinite(s) || s < 0 ? '--:--' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;

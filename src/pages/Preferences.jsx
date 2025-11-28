@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import DualList from '../components/ui/DualList';
 import { newspapers, sections } from '../utils/mockData';
 import preferencesService from '../services/preferencesService';
+import { useLoading } from '../hooks/LoadingProvider.jsx';
 
 function normalizePrefs(payload) {
     if (!payload) return { newspapers: [], sections: [], topics: [] };
@@ -43,6 +44,8 @@ export default function Preferences() {
     const secLeft = allSections.filter(s => !selSections.includes(s));
     const secRight = selSections;
 
+    const page_loading = useLoading();
+
     // Load from DB on mount
     useEffect(() => {
         (async () => {
@@ -66,25 +69,32 @@ export default function Preferences() {
     }, []);
 
     const save = async () => {
-        const prefs = { newspapers: selSources, sections: selSections, topics };
-        const res = await preferencesService.updatePreferences(prefs);
-        if (!res?.success) {
-            console.error('Save preferences failed:', res?.error);
-            return;
-        }
-        // Re-fetch to stay perfectly in sync with DB (and catch any server-side transforms)
+        page_loading.show('Saving your preferences…'); // 👈 show overlay
         try {
+            const prefs = { newspapers: selSources, sections: selSections, topics };
+            const res = await preferencesService.updatePreferences(prefs);
+
+            if (!res?.success) {
+                console.error('Save preferences failed:', res?.error);
+                return;
+            }
+
+            // Re-fetch to stay in sync
             const data = await preferencesService.getPreferences();
             const norm = normalizePrefs(data);
             const validSources = norm.newspapers.filter(v => allSources.includes(v));
             const validSections = norm.sections.filter(v => allSections.includes(v));
+
             setSelSources(validSources);
             setSelSections(validSections);
             setTopics(norm.topics || []);
         } catch (e) {
             console.error('Post-save fetch failed:', e);
+        } finally {
+            page_loading.hide(); // 👈 hide overlay
         }
     };
+
 
     const addTopic = () => {
         const v = (input || '').trim();

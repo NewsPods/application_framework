@@ -105,6 +105,9 @@ export default function Home() {
         <div className="space-y-8">
 
             {/* --- 1. MAIN DAILY DIGEST --- */}
+            <div>
+
+            </div>
             <section>
                 <div className="rounded-2xl border rule bg-white/90 dark:bg-[#2d2b29] p-5 shadow-sm">
                     <div className="kicker">Daily Digest • {new Date(data.date).toLocaleDateString()}</div>

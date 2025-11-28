@@ -1,1 +1,0 @@
-export default function Preferences(){return <div className='p-4'>Preferences</div>}
