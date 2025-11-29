@@ -29,4 +29,12 @@ export default defineConfig(async () => ({
       ignored: ["**/src-main-tauri/**"],
     },
   },
+
+    build: {
+        minify: "esbuild",     // fastest + smallest output
+        sourcemap: false,      // removes ~30–50% of APK size
+        target: "es2017",      // modern target = smaller bundles
+        cssMinify: true,       // minify CSS
+        chunkSizeWarningLimit: 2000, // avoid spam, optional
+    },
 }));

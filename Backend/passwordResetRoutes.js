@@ -56,6 +56,30 @@ This link expires in 30 minutes. If you didn’t request this, you can ignore th
 // --- CONSTANTS
 const TOKEN_TTL_MINUTES = 30;
 
+
+router.get('/password-reset/bouncer', (req, res) => {
+    const token = req.query.token;
+    const deepLink = `newspods://reset?token=${token}`;
+
+    const html = `
+      <html>
+        <body style="background-color: #fdfbf7; font-family: serif; text-align: center; padding-top: 50px;">
+          <h2>Opening NewsPods...</h2>
+          <p>If the app doesn't open, <a href="${deepLink}">click here</a>.</p>
+          <script>
+            // Try to open the app immediately
+            window.location.href = "${deepLink}";
+            
+            // Optional: Close this tab after a few seconds
+            setTimeout(() => {
+                 // window.close(); // Browsers often block this, but worth a try
+            }, 3000);
+          </script>
+        </body>
+      </html>
+    `;
+    res.send(html);
+});
 // Request a reset link (generic response to prevent user enumeration)
 router.post('/password-reset/request', async (req, res) => {
     try {
@@ -84,8 +108,8 @@ router.post('/password-reset/request', async (req, res) => {
         );
 
         // Build reset link using a trusted base URL (DON'T trust Host header)
-        const appUrl = process.env.APP_URL; // e.g. https://yourdomain.com
-        const resetLink = `${appUrl.replace(/\/$/, '')}/reset?token=${encodeURIComponent(token)}`;
+        const appUrl = `${req.protocol}://${req.get('host')}`; // e.g. https://yourdomain.com
+        const resetLink = `${appUrl}/api/auth/password-reset/bouncer?token=${encodeURIComponent(token)}`;
 
         await sendResetEmail({ to: user.email, resetLink });
 

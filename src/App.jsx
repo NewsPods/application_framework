@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Provider as JotaiProvider } from 'jotai';
 import Toaster from './components/ui/Modal.jsx'; // tiny no-op; using Modal export to avoid extra dep
-
+import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 // Layout
 import Layout from './components/layout/Layout';
 
@@ -68,10 +68,45 @@ function AppRoutes() {
     );
 }
 
+function DeepLinkHandler() {
+    const nav = useNavigate();
+
+    useEffect(() => {
+        let unlisten;
+
+        async function startListening() {
+            // This function fires whenever the app is opened via a URL
+            unlisten = await onOpenUrl((urls) => {
+                console.log('Deep link received:', urls);
+
+                for (const url of urls) {
+                    // Check if it matches newspods://reset
+                    if (url.includes('newspods://reset')) {
+                        const token = new URL(url).searchParams.get('token');
+                        if (token) {
+                            // Navigate to your existing Reset Password page
+                            nav(`/reset?token=${token}`);
+                        }
+                    }
+                }
+            });
+        }
+
+        startListening();
+
+        return () => {
+            if (unlisten) unlisten();
+        };
+    }, [nav]);
+
+    return null; // Invisible component
+}
+
 export default function App() {
     return (
         <JotaiProvider>
             <Router>
+                <DeepLinkHandler />
                 <div className="min-h-screen bg-paper transition-colors">
                     <AppRoutes />
                     {/* No-op Toaster placeholder to keep structure similar */}
