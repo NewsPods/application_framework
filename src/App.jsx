@@ -29,7 +29,7 @@ import CustomizeTopics from './pages/onboarding/CustomizeTopics';
 
 function AppRoutes() {
     const hasOnboarded = localStorage.getItem('np_hasOnboarded') === '1';
-
+    const isAuthenticated = !!localStorage.getItem('authToken');
     return (
         <Routes>
             {/* Tester (leave as-is) */}
@@ -60,7 +60,12 @@ function AppRoutes() {
             </Route>
 
             {/* Root redirect */}
-            <Route path="/" element={<Navigate to={hasOnboarded ? '/auth' : '/welcome'} replace />} />
+            <Route path="/" element={
+                <Navigate to={
+                    !hasOnboarded ? '/welcome' :
+                        (isAuthenticated ? '/app' : '/auth')
+                } replace />
+            } />
 
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/welcome" replace />} />

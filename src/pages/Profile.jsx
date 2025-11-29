@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 export default function Profile() {
     const nav = useNavigate();
+    const { logout } = useAuth();
 
     // user info
     const [user, setUser] = useState(null);
@@ -164,6 +166,10 @@ export default function Profile() {
             setBusy(false);
         }
     }
+    const handleLogout = () => {
+        logout(); // Clears localStorage
+        nav('/auth');
+    };
 
     if (loadingUser) {
         return <div className="kicker px-4 sm:px-6 pt-6 pb-2">Loading profile…</div>;
@@ -225,6 +231,12 @@ export default function Profile() {
                     </div>
                 </div>
 
+                <button
+                    onClick={handleLogout}
+                    className="mt-4 w-full px-4 py-3 rounded-lg border rule bg-slate-200 dark:bg-[#383532] text-slate-800 dark:text-[#e0dcd3] font-bold"
+                >
+                    Log out
+                </button>
 
                 {(msg || err) && (
                     <div className={`mt-3 text-sm ${err ? 'text-red-600' : 'text-green-700'}`}>
