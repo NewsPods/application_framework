@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { sections as ALL } from '../../utils/mockData';
 import { useLoading } from '../../hooks/LoadingProvider.jsx'; // 👈 added import
+import Storage from '../../services/storage';
 
 export default function CustomizeSections() {
     const nav = useNavigate();
@@ -14,7 +15,7 @@ export default function CustomizeSections() {
     const next = async () => {
         loading.show('Saving your preferences…'); // 👈 show overlay
         try {
-            localStorage.setItem('np_sections', JSON.stringify(sel));
+            await Storage.set('np_sections', sel);
             // simulate a small delay for UX smoothness
             await new Promise((r) => setTimeout(r, 600));
             nav('/onboarding/topics');

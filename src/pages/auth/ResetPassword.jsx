@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import BackButton from "../../components/ui/BackButton.jsx";
 import { useLoading } from '../../hooks/LoadingProvider.jsx'; // 👈 added
 
+const API = import.meta.env.VITE_API_URL;
+
 export default function ResetPassword() {
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState({ loading: false, msg: '' });
@@ -13,7 +15,7 @@ export default function ResetPassword() {
         setStatus({ loading: true, msg: '' });
         loading.show("Sending password reset link…"); // 👈 show overlay
         try {
-            const res = await fetch('http://localhost:4000/api/auth/password-reset/request', {
+            const res = await fetch(`${API}/auth/password-reset/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email })

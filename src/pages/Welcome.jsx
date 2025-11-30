@@ -1,9 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import Storage from '../services/storage';
 
 export default function Welcome(){
     const nav = useNavigate();
-    const start = ()=>{ localStorage.setItem('np_hasOnboarded','1'); nav('/auth'); };
+    const start = async () => {
+        await Storage.set('np_hasOnboarded','1');
+        nav('/auth');
+    };
     return (
         <div className="min-h-screen bg-paper flex items-center justify-center px-6">
             <div className="max-w-md text-center">

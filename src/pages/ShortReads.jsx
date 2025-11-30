@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import preferencesService from '../services/preferencesService';
 import { useLoading } from '../hooks/LoadingProvider';
+import Storage from '../services/storage';
 
 // Helper: Secure fetch wrapper
 async function fetchJSON(path, opts = {}) {
     const base = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
     const url = path.startsWith('http') ? path : `${base}${path}`;
-    const token = localStorage.getItem('authToken');
+    const token = await Storage.get('authToken');
 
     const res = await fetch(url, {
         ...opts,

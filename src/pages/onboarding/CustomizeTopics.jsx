@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { topicSuggestions } from '../../utils/mockData';
 import PreferencesService from '../../services/preferencesService';
 import { useLoading } from '../../hooks/LoadingProvider.jsx'; // 👈 added
+import Storage from '../../services/storage';
 
 export default function CustomizeTopics(){
     const nav = useNavigate();
@@ -23,11 +24,10 @@ export default function CustomizeTopics(){
     const remove = (t) => setTopics(topics.filter(x => x !== t));
 
     const finish = async () => {
-        const prefs = {
-            newspapers: JSON.parse(localStorage.getItem('np_sources') || '[]'),
-            sections: JSON.parse(localStorage.getItem('np_sections') || '[]'),
-            topics
-        };
+        const newspapers = (await Storage.get('np_sources')) || [];
+        const sections = (await Storage.get('np_sections')) || [];
+
+        const prefs = { newspapers, sections, topics };
 
         loading.show('Saving your preferences…'); // 👈 show overlay
         try {

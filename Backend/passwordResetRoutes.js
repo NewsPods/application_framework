@@ -2,9 +2,12 @@
 const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend'); // 👈 Import Resend
 
 const router = express.Router();
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // --- util: base64url encode w/out +/ / = (URL-safe)
 function toBase64Url(buf) {
@@ -13,50 +16,55 @@ function toBase64Url(buf) {
 
 // --- generate a high-entropy, single-use token
 function generateToken() {
-    return toBase64Url(crypto.randomBytes(32)); // 256-bit random; URL-safe
+    return toBase64Url(crypto.randomBytes(32));
 }
 
-// --- stable SHA-256 for server-side storage (do NOT store raw token)
+// --- stable SHA-256 for server-side storage
 function hashToken(token) {
     return crypto.createHash('sha256').update(token, 'utf8').digest();
-}
-
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for 587
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-});
-// --- minimal mailer abstraction (fill in later)
-async function sendResetEmail({ to, resetLink }) {
-    const subject = 'Reset your Newspods password';
-    const html = `
-    <p>We received a request to reset your Newspods password.</p>
-    <p><a href="${resetLink}" target="_blank" rel="noopener">Reset your password</a></p>
-    <p>This link expires in 30 minutes. If you didn’t request this, you can ignore this email.</p>
-  `;
-    const text =
-        `We received a request to reset your Newspods password.
-Reset link: ${resetLink}
-This link expires in 30 minutes. If you didn’t request this, you can ignore this email.`;
-
-    const info = await transporter.sendMail({
-        from: process.env.SMTP_FROM,
-        to,
-        subject,
-        text,
-        html
-    });
-
-    if (process.env.NODE_ENV !== 'production') {
-        console.log('Reset email sent:', info.messageId);
-    }
 }
 
 // --- CONSTANTS
 const TOKEN_TTL_MINUTES = 30;
 
+// --- Helper: Send Email via Resend (HTTP API) ---
+async function sendResetEmail({ to, resetLink }) {
+    console.log('🔗 [DEV BACKUP] Password Reset Link:', resetLink); // 👈 Guaranteed way to see link in Render Logs
 
+    // If no API key, stop here (dev mode)
+    if (!process.env.RESEND_API_KEY) {
+        console.log('⚠️ No RESEND_API_KEY found. Using console logs only.');
+        return;
+    }
+
+    try {
+        const { data, error } = await resend.emails.send({
+            from: 'NewsPods <onboarding@resend.dev>', // 👈 Resend Free Tier MUST use this sender
+            to: [to], // 👈 In Free Tier, you can only send to YOUR OWN email (the one you signed up with)
+            subject: 'Reset your NewsPods password',
+            html: `
+            <div style="font-family: sans-serif; padding: 20px;">
+                <h2>Password Reset Request</h2>
+                <p>Click the button below to reset your password. Valid for 30 minutes.</p>
+                <a href="${resetLink}" style="background-color: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+                <p style="margin-top: 20px; color: #666; font-size: 12px;">If you didn't request this, ignore this email.</p>
+            </div>
+            `
+        });
+
+        if (error) {
+            console.error('❌ Resend API Error:', error);
+        } else {
+            console.log('✅ Email sent via Resend:', data.id);
+        }
+    } catch (err) {
+        console.error('❌ Failed to send email:', err);
+    }
+}
+
+// --- ROUTES ---
+
+// 1. Bouncer (Deep Link Redirection)
 router.get('/password-reset/bouncer', (req, res) => {
     const token = req.query.token;
     const deepLink = `newspods://reset?token=${token}`;
@@ -67,61 +75,59 @@ router.get('/password-reset/bouncer', (req, res) => {
           <h2>Opening NewsPods...</h2>
           <p>If the app doesn't open, <a href="${deepLink}">click here</a>.</p>
           <script>
-            // Try to open the app immediately
             window.location.href = "${deepLink}";
-            
-            // Optional: Close this tab after a few seconds
-            setTimeout(() => {
-                 // window.close(); // Browsers often block this, but worth a try
-            }, 3000);
           </script>
         </body>
       </html>
     `;
     res.send(html);
 });
-// Request a reset link (generic response to prevent user enumeration)
+
+// 2. Request Reset Link
 router.post('/password-reset/request', async (req, res) => {
     try {
         const email = (req.body?.email || '').trim().toLowerCase();
-        // Always respond generically, per OWASP (avoid user enumeration).
         const generic = { success: true, message: 'If that email exists, we\'ve sent reset instructions.' };
 
         if (!email) return res.json(generic);
 
-        // Look up user silently
         const { rows } = await req.db.query(
             `SELECT user_id, email FROM users WHERE email = $1 LIMIT 1`,
             [email]
         );
         const user = rows[0];
-        if (!user) return res.json(generic);
+        if (!user) {
+            // Log for debugging, but don't tell client
+            console.log(`⚠️ Password reset requested for non-existent email: ${email}`);
+            return res.json(generic);
+        }
 
-        // Create token + store the hash
         const token = generateToken();
         const tokenHash = hashToken(token);
 
         await req.db.query(
             `INSERT INTO password_resets (user_id, token_hash, requested_at, ip, user_agent)
-       VALUES ($1, $2, now(), $3, $4)`,
+             VALUES ($1, $2, now(), $3, $4)`,
             [user.user_id, tokenHash, req.ip, req.headers['user-agent'] || null]
         );
 
-        // Build reset link using a trusted base URL (DON'T trust Host header)
-        const appUrl = `${req.protocol}://${req.get('host')}`; // e.g. https://yourdomain.com
-        const resetLink = `${appUrl}/api/auth/password-reset/bouncer?token=${encodeURIComponent(token)}`;
+        const appUrl = process.env.VITE_API_URL || `${req.protocol}://${req.get('host')}`;
+        // Ensure we point to the API route, not just the base domain
+        const baseUrl = appUrl.endsWith('/api') ? appUrl : `${appUrl}/api`;
 
+        const resetLink = `${baseUrl}/auth/password-reset/bouncer?token=${encodeURIComponent(token)}`;
+
+        // Send (or log)
         await sendResetEmail({ to: user.email, resetLink });
 
         return res.json(generic);
     } catch (err) {
         console.error('password-reset/request error:', err);
-        // Still return generic message to avoid enumeration
         return res.json({ success: true, message: 'If that email exists, we\'ve sent reset instructions.' });
     }
 });
 
-// Validate token before showing reset UI
+// 3. Validate Token
 router.get('/password-reset/validate', async (req, res) => {
     try {
         const token = (req.query?.token || '').trim();
@@ -130,22 +136,20 @@ router.get('/password-reset/validate', async (req, res) => {
         const tokenHash = hashToken(token);
         const { rows } = await req.db.query(
             `SELECT pr.user_id, u.email, pr.requested_at, pr.used_at
-       FROM password_resets pr
-       JOIN users u ON u.user_id = pr.user_id
-       WHERE pr.token_hash = $1
-       LIMIT 1`,
+             FROM password_resets pr
+             JOIN users u ON u.user_id = pr.user_id
+             WHERE pr.token_hash = $1
+             LIMIT 1`,
             [tokenHash]
         );
         const row = rows[0];
         if (!row) return res.status(400).json({ success: false, error: 'Invalid or expired token' });
 
-        // Ensure not used and not past TTL window (defense-in-depth against eventual TTL)
         const expiresAt = new Date(new Date(row.requested_at).getTime() + TOKEN_TTL_MINUTES * 60 * 1000);
         if (row.used_at || new Date() > expiresAt) {
             return res.status(400).json({ success: false, error: 'Invalid or expired token' });
         }
 
-        // OK — you can optionally return a masked email
         const masked = row.email.replace(/^(.).+(@.+)$/, (_, a, b) => a + '***' + b);
         return res.json({ success: true, email_masked: masked });
     } catch (err) {
@@ -154,7 +158,7 @@ router.get('/password-reset/validate', async (req, res) => {
     }
 });
 
-// Confirm reset (set new password, mark token used)
+// 4. Confirm Reset
 router.post('/password-reset/confirm', async (req, res) => {
     try {
         const { token, new_password } = req.body || {};
@@ -165,10 +169,10 @@ router.post('/password-reset/confirm', async (req, res) => {
         const tokenHash = hashToken(token);
         const { rows } = await req.db.query(
             `SELECT pr.user_id, pr.requested_at, pr.used_at, u.password_hash
-       FROM password_resets pr
-       JOIN users u ON u.user_id = pr.user_id
-       WHERE pr.token_hash = $1
-       LIMIT 1`,
+             FROM password_resets pr
+             JOIN users u ON u.user_id = pr.user_id
+             WHERE pr.token_hash = $1
+             LIMIT 1`,
             [tokenHash]
         );
         const row = rows[0];
@@ -179,20 +183,14 @@ router.post('/password-reset/confirm', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Invalid or expired token' });
         }
 
-        // Reject if new password equals current (compare against existing hash)
         const same = await bcrypt.compare(new_password, row.password_hash);
         if (same) {
             return res.status(400).json({ success: false, error: 'New password cannot be same as old password' });
         }
 
-        // Update password
         const newHash = await bcrypt.hash(new_password, 12);
         await req.db.query(`UPDATE users SET password_hash = $1 WHERE user_id = $2`, [newHash, row.user_id]);
-
-        // Mark token as used (prevents reuse)
         await req.db.query(`UPDATE password_resets SET used_at = now() WHERE token_hash = $1`, [tokenHash]);
-
-        // (Recommended) Invalidate existing sessions/tokens here if you maintain a session store.
 
         return res.json({ success: true });
     } catch (err) {

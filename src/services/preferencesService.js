@@ -1,9 +1,9 @@
-// src/services/preferencesService.js
+import Storage from './storage'; // 👈 Import
 const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 class PreferencesService {
     async updatePreferences(preferences) {
-        const token = localStorage.getItem('authToken');
+        const token = await Storage.get('authToken'); // 👈 Async
         if (!token) {
             console.warn('⚠️ No auth token found, skipping backend call');
             return { success: false, error: 'Not authenticated' };
@@ -21,25 +21,22 @@ class PreferencesService {
 
             const data = await res.json();
             if (!res.ok) {
-                console.error('❌ Error saving preferences:', data);
                 return { success: false, error: data.error || 'Failed to save preferences' };
             }
 
-            // Update local cache if backend succeeds
-            const currentUser = JSON.parse(localStorage.getItem('currentUser')) || {};
+            // Update local cache
+            const currentUser = (await Storage.get('currentUser')) || {}; // 👈 Async
             currentUser.preferences = preferences;
-            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            await Storage.set('currentUser', currentUser); // 👈 Async
 
-            console.log('✅ Preferences saved to backend:', data);
             return { success: true, preferences };
         } catch (err) {
-            console.error('❌ Network/server error while saving preferences:', err);
             return { success: false, error: err.message };
         }
     }
 
     async getPreferences() {
-        const token = localStorage.getItem('authToken');
+        const token = await Storage.get('authToken'); // 👈 Async
         if (!token) return { newspapers: [], sections: [], topics: [] };
 
         try {
@@ -53,7 +50,6 @@ class PreferencesService {
             }
             return { newspapers: [], sections: [], topics: [] };
         } catch (err) {
-            console.error('Error fetching preferences:', err);
             return { newspapers: [], sections: [], topics: [] };
         }
     }

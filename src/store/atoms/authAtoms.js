@@ -1,2 +1,4 @@
 import { atom } from 'jotai';
-export const userAtom = atom(JSON.parse(localStorage.getItem('currentUser') || 'null'));
+
+// Initialize as null so we know we are "loading"
+export const userAtom = atom(null);

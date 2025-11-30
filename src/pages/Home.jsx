@@ -5,6 +5,7 @@ import { useLoading } from '../hooks/LoadingProvider';
 import NewsCard from '../components/news/newsCard';
 import axios from 'axios';
 import { Play, Headphones } from 'lucide-react';
+import Storage from '../services/storage';
 
 export default function Home() {
     const [, setTrack] = useAtom(currentTrackAtom);
@@ -18,7 +19,7 @@ export default function Home() {
     useEffect(() => {
         const fetchHomeData = async () => {
             try {
-                const token = localStorage.getItem('authToken');
+                const token = await Storage.get('authToken')
                 const API_URL = `${import.meta.env.VITE_API_URL}/home/feed`;
 
                 const res = await axios.get(API_URL, {

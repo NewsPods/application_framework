@@ -1,8 +1,25 @@
 import { useEffect, useState } from 'react';
-export const useLocalStorage = (key, initialValue) => {
-    const [value, setValue] = useState(() => {
-        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : initialValue; } catch { return initialValue; }
-    });
-    useEffect(() => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }, [key, value]);
-    return [value, setValue];
+import Storage from '../services/storage';
+
+export const useStorage = (key, initialValue) => {
+    const [value, setValue] = useState(initialValue);
+
+    // Initial Load
+    useEffect(() => {
+        let mounted = true;
+        Storage.get(key).then(v => {
+            if (mounted && v !== null && v !== undefined) {
+                setValue(v);
+            }
+        });
+        return () => { mounted = false; };
+    }, [key]);
+
+    // Save on change
+    const setStoredValue = (newValue) => {
+        setValue(newValue);
+        Storage.set(key, newValue).catch(console.error);
+    };
+
+    return [value, setStoredValue];
 };

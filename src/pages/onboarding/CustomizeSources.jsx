@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { newspapers } from '../../utils/mockData';
 import Chip from '../../components/ui/Chip';
 import { useLoading } from '../../hooks/LoadingProvider.jsx'; // 👈 added
+import Storage from '../../services/storage';
 
 export default function CustomizeSources() {
     const nav = useNavigate();
@@ -15,7 +16,7 @@ export default function CustomizeSources() {
     const next = async () => {
         loading.show('Saving your preferences…'); // 👈 show overlay
         try {
-            localStorage.setItem('np_sources', JSON.stringify(sel));
+            await Storage.set('np_sources', sel);
             // small delay for smoother UX transition
             await new Promise((r) => setTimeout(r, 600));
             nav('/onboarding/sections');

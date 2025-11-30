@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLoading } from '../../hooks/LoadingProvider.jsx'; // 👈 overlay hook
 
+const API = import.meta.env.VITE_API_URL;
+
 export default function NewPassword(){
     const nav = useNavigate();
     const { search } = useLocation();
@@ -20,7 +22,7 @@ export default function NewPassword(){
             }
             loading.show('Validating reset link…'); // 👈 show overlay
             try {
-                const r = await fetch(`http://localhost:4000/api/auth/password-reset/validate?token=${encodeURIComponent(token)}`);
+                const r = await fetch(`${API}/auth/password-reset/validate?token=${encodeURIComponent(token)}`);
                 const json = await r.json();
                 if (json.success) {
                     setState({ loading: false, valid: true, msg: `Reset link valid for ${json.email_masked}` });
@@ -43,7 +45,7 @@ export default function NewPassword(){
         }
         loading.show('Resetting password…'); // 👈 show overlay
         try {
-            const r = await fetch('http://localhost:4000/api/auth/password-reset/confirm', {
+            const r = await fetch(`${API}/auth/password-reset/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, new_password: a })

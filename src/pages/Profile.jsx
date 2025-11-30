@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import Storage from '../services/storage'; // 👈 Import new storage service
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 export default function Profile() {
     const nav = useNavigate();
-    const { logout } = useAuth();
+    const { logout } = useAuth(); // This calls authService.logout -> Storage.clear()
 
     // user info
     const [user, setUser] = useState(null);
@@ -27,9 +28,9 @@ export default function Profile() {
     const [err, setErr] = useState('');
     const [busy, setBusy] = useState(false);
 
-    const token = useMemo(() => localStorage.getItem('authToken') || '', []);
-
-    function headers(json = true) {
+    // 1. Helper to build headers asynchronously (retrieves token from Store)
+    async function getHeaders(json = true) {
+        const token = await Storage.get('authToken');
         return {
             ...(json ? { 'Content-Type': 'application/json' } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -44,16 +45,34 @@ export default function Profile() {
         return () => { document.body.style.overflow = prev; };
     }, [showUser, showPw]);
 
-    // load current user
+    // 2. Load current user (Async)
     useEffect(() => {
+        let mounted = true;
         (async () => {
             try {
-                const r = await fetch(`${API}/auth/me`, { headers: headers(false) });
+                // Check local cache first (optional optimization)
+                const cachedUser = await Storage.get('currentUser');
+                if (mounted && cachedUser) setUser(cachedUser);
+
+                // Fetch fresh from network
+                const headers = await getHeaders(false);
+
+                // If no token in headers, redirect (headers['Authorization'] check)
+                if (!headers.Authorization) {
+                    if (mounted) nav('/auth');
+                    return;
+                }
+
+                const r = await fetch(`${API}/auth/me`, { headers });
                 const ctype = r.headers.get('content-type') || '';
                 const data = ctype.includes('application/json') ? await r.json() : {};
+
+                if (!mounted) return;
+
                 if (r.ok && data?.user) {
                     setUser(data.user);
-                    localStorage.setItem('currentUser', JSON.stringify(data.user));
+                    // 👈 Update Native Store
+                    await Storage.set('currentUser', data.user);
                 } else if (r.status === 401) {
                     nav('/auth');
                 } else {
@@ -61,11 +80,13 @@ export default function Profile() {
                 }
             } catch (e) {
                 console.error(e);
-                setErr('Failed to load profile');
+                if (mounted) setErr('Failed to load profile');
             } finally {
-                setLoadingUser(false);
+                if (mounted) setLoadingUser(false);
             }
         })();
+
+        return () => { mounted = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -85,9 +106,10 @@ export default function Profile() {
         }
         setBusy(true); setErr(''); setMsg('');
         try {
+            const headers = await getHeaders(); // 👈 Async call
             const r = await fetch(`${API}/auth/change-username`, {
                 method: 'POST',
-                headers: headers(),
+                headers,
                 body: JSON.stringify({ username: newUsername }),
             });
             const data = await r.json();
@@ -97,7 +119,10 @@ export default function Profile() {
             }
             setMsg('Username updated.');
             setUser(data.user);
-            localStorage.setItem('currentUser', JSON.stringify(data.user));
+
+            // 👈 Update Native Store
+            await Storage.set('currentUser', data.user);
+
             setShowUser(false);
             setNewUsername('');
         } catch (e) {
@@ -115,9 +140,10 @@ export default function Profile() {
         }
         setBusy(true); setErr(''); setMsg('');
         try {
+            const headers = await getHeaders(); // 👈 Async call
             const r = await fetch(`${API}/auth/change-password`, {
                 method: 'POST',
-                headers: headers(),
+                headers,
                 body: JSON.stringify({ old_password: oldPw, new_password: newPw }),
             });
             const data = await r.json();
@@ -145,9 +171,10 @@ export default function Profile() {
 
         setBusy(true); setErr(''); setMsg('');
         try {
+            const headers = await getHeaders(); // 👈 Async call
             const r = await fetch(`${API}/auth/delete`, {
                 method: 'DELETE',
-                headers: headers(),
+                headers,
                 body: JSON.stringify({ password: delPw }),
             });
             const data = await r.json();
@@ -155,8 +182,10 @@ export default function Profile() {
                 setErr(data?.error || 'Could not delete account');
                 return;
             }
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('currentUser');
+
+            // 👈 Clear storage via auth service logout or manual clear
+            await logout();
+
             setMsg('Account deleted.');
             nav('/welcome');
         } catch (e) {
@@ -166,8 +195,9 @@ export default function Profile() {
             setBusy(false);
         }
     }
-    const handleLogout = () => {
-        logout(); // Clears localStorage
+
+    const handleLogout = async () => {
+        await logout(); // 👈 Async logout
         nav('/auth');
     };
 
@@ -177,43 +207,35 @@ export default function Profile() {
 
     return (
         <div className="space-y-6 px-4 sm:px-6 pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),6rem)]">
-            {/* ↑ extra bottom padding so content never tucks under a fixed bottom menu */}
-
             {/* Header */}
             <section>
                 <div className="kicker">Profile</div>
                 <h2 className="headline text-2xl sm:text-3xl">Account settings</h2>
                 <div className="rule my-3" />
 
-                {/* User card (responsive) */}
+                {/* User card */}
                 <div className="rounded-2xl border rule bg-white/80 dark:bg-black/30 p-4 md:p-5">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-[auto,1fr,auto] md:items-start">
-                        {/* Avatar */}
+                        {/* Avatar + Details */}
                         <div className="flex flex-col items-center text-center gap-3 md:flex-row md:items-center md:text-left">
-                            {/* Avatar */}
                             <div className="h-14 w-14 md:h-16 md:w-16 rounded-full bg-slate-900 text-white dark:bg-amber-500 dark:text-black grid place-items-center font-semibold text-lg">
                                 {initials}
                             </div>
-
-                            {/* User text */}
                             <div className="min-w-0">
                                 <div className="headline truncate text-balance">
                                     {(user?.first_name || '')} {(user?.last_name || '')}
                                 </div>
                                 <div className="byline break-words">{user?.email}</div>
                                 <div className="byline">
-                                    Username:{' '}
-                                    <span className="font-mono break-all">{user?.username}</span>
+                                    Username: <span className="font-mono break-all">{user?.username}</span>
                                 </div>
                                 <div className="byline">
-                                    Joined:{' '}
-                                    {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
+                                    Joined: {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
                                 </div>
                             </div>
                         </div>
 
-
-                        {/* Actions (right on desktop, full-width stack on mobile) */}
+                        {/* Actions */}
                         <div className="grid grid-cols-1 gap-2 md:justify-items-center md:gap-3">
                             <button
                                 onClick={() => { setShowUser(true); setNewUsername(user?.username || ''); }}
@@ -268,16 +290,14 @@ export default function Profile() {
                 </div>
             </section>
 
-            {/* Username Modal (centered, above everything) */}
+            {/* Username Modal */}
             {showUser && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                    {/* Backdrop */}
                     <div
                         className="absolute inset-0 bg-black/50"
                         onClick={() => setShowUser(false)}
                         aria-hidden="true"
                     />
-                    {/* Dialog */}
                     <div className="relative w-full max-w-md rounded-2xl border rule bg-white p-4 md:p-5 shadow-xl">
                         <h4 className="headline text-lg">Change username</h4>
                         <input
@@ -302,7 +322,7 @@ export default function Profile() {
                 </div>
             )}
 
-            {/* Password Modal (centered, above everything) */}
+            {/* Password Modal */}
             {showPw && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
                     <div

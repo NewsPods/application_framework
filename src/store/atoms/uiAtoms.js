@@ -1,9 +1,4 @@
 import { atom } from 'jotai';
 
-const initialTheme = (() => {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'dark' || saved === 'light') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-})();
-
-export const themeAtom = atom(initialTheme);
+// Default to system or light, hydration will override this later
+export const themeAtom = atom('light');
