@@ -1,30 +1,30 @@
+// src/services/storage.js
 import { Store } from '@tauri-apps/plugin-store';
 
-// Initialize the store file
-const store = new Store('settings.json');
+let store = null;
+
+async function getStore() {
+    if (!store) {
+        store = await Store.load('settings.json', { /* you can pass options, e.g. autoSave: false */ });
+    }
+    return store;
+}
 
 const StorageService = {
-    // Save a value
     async set(key, value) {
-        await store.set(key, value);
-        await store.save(); // Crucial: Flushes to disk
+        const s = await getStore();
+        await s.set(key, value);
+        await s.save();
     },
-
-    // Get a value
     async get(key) {
-        return await store.get(key);
+        const s = await getStore();
+        const val = await s.get(key);
+        return val;
     },
-
-    // Remove a value
-    async remove(key) {
-        await store.delete(key);
-        await store.save();
-    },
-
-    // Clear all (for logout)
     async clear() {
-        await store.clear();
-        await store.save();
+        const s = await getStore();
+        await s.clear();
+        await s.save();
     }
 };
 

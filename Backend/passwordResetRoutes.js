@@ -39,7 +39,7 @@ async function sendResetEmail({ to, resetLink }) {
 
     try {
         const { data, error } = await resend.emails.send({
-            from: 'NewsPods <onboarding@resend.dev>', // 👈 Resend Free Tier MUST use this sender
+            from: 'NewsPods <support@amoghgoyal.online>', // 👈 Resend Free Tier MUST use this sender
             to: [to], // 👈 In Free Tier, you can only send to YOUR OWN email (the one you signed up with)
             subject: 'Reset your NewsPods password',
             html: `
