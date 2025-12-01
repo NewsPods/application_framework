@@ -158,7 +158,7 @@ const AudioPlayer = () => {
 
             {/* --- The Mini Player UI --- */}
             <div
-                className="fixed bottom-[4.5rem] left-0 right-0 z-40 px-4"
+                className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 px-4 transition-all"
                 onClick={() => navigate('/app/now-playing')}
             >
                 <div className="max-w-lg mx-auto cursor-pointer transform transition-transform hover:scale-[1.02] active:scale-[0.98]">

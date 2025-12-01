@@ -11,7 +11,7 @@ const items = [
 export default function MobileNav(){
     const nav = useNavigate(); const loc = useLocation();
     return (
-        <nav className="fixed bottom-0 inset-x-0 z-50 border-t rule bg-white/90 dark:bg-black/50 backdrop-blur-xl">
+        <nav className="fixed bottom-0 inset-x-0 z-50 border-t rule bg-white/90 dark:bg-black/50 backdrop-blur-xl pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] transition-all">
             <div className="max-w-lg mx-auto px-2 py-2 grid grid-cols-4 gap-2">
                 {items.map(it=>{
                     const active = loc.pathname === it.path;
